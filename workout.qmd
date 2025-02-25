@@ -243,36 +243,39 @@ total_workout_volume |>
 # Workout
 
 ```{r}
-create_plot <- function(group_name) {
-  required_cols <- c("muscle_group", "weight_lb", "rep", "date")
-  if (!all(required_cols %in% colnames(workout_sheet))) return(NULL)
-  
-  muscle_data <- workout_sheet |>
+#| label: volume-strength-plot
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+
+process_muscle_data <- function(group_name, metric) {
+  workout_sheet |>
     filter(muscle_group %in% group_name) |>
-    mutate(volume = weight_lb * rep) |>
-    arrange(date)  # Ensure the data is sorted
-  
-  # Aggregate total volume by week (Sunday to Saturday)
-  muscle_data <- muscle_data |>
+    mutate(value = if (metric == "volume") weight_lb * rep else weight_lb * (1 + (rep / 30))) |>
+    arrange(date) |>
     mutate(
-      week_start = floor_date(as.Date(date), "week", week_start = 7),  # Start on Sunday
-      week_end = week_start + 6,  # End on Saturday
-      week_label = paste(format(week_start, "%b %d"), "-", format(week_end, "%b %d"))
+      week_start = floor_date(as.Date(date), "week", week_start = 7),
+      week_label = paste(format(week_start, "%b %d"), "-", format(week_start + 6, "%b %d"))
     ) |>
     group_by(week_label, week_start) |>
-    summarise(total_volume = sum(volume), .groups = "drop") |> # Aggregate weekly
-    mutate(highest = total_volume == max(total_volume)) |>
-    arrange(week_start) |> 
-    slice_tail(n = 10)  # Keep only the last 10 weeks
+    summarise(agg_value = if (metric == "volume") sum(value) else mean(value, na.rm = TRUE), .groups = "drop") |>
+    mutate(highest = agg_value == max(agg_value)) |>
+    arrange(week_start) |>
+    slice_tail(n = 10)
+}
+
+create_plot <- function(group_name, metric) {
+  muscle_data <- process_muscle_data(group_name, metric)
   
-  # Plot the weekly data
-  ggplot(muscle_data, aes(x = week_label, y = total_volume/1000, group = 1, fill = highest)) +
+  ggplot(muscle_data, aes(x = week_label, y = if (metric == "volume") agg_value / 1000 else agg_value, group = 1, fill = highest)) +
     geom_col() +
-    scale_y_continuous(labels = scales::label_number(suffix = " K"),
-                       limits = c(0, NA),
-                       expand = expansion(mult = c(0, 0.1))) +
-    labs(x = NULL, y = "Total volume (lbs)") +
-    scale_fill_manual(values = c("#ae8b2d", "#0e2635"), guide = "none") +  # Default & highlight color
+    scale_y_continuous(
+      labels = if (metric == "volume") scales::label_number(suffix = " K") else scales::label_number(),
+      limits = c(0, NA),
+      expand = expansion(mult = c(0, 0.1))
+    ) +
+    labs(x = NULL, y = if (metric == "volume") "Total volume (lbs)" else "Mean 1RM (lbs)") +
+    scale_fill_manual(values = c("FALSE" = "#ae8b2d", "TRUE" = "#0e2635"), guide = "none") +
     theme_minimal(base_size = 20) +
     theme(axis.text.x = element_text(size = 15))
 }
@@ -280,104 +283,176 @@ create_plot <- function(group_name) {
 
 ## Row {height="25%"}
 
-### Column {width="33.33%"}
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Chest
 #| fig-asp: 0.3
-create_plot("Chest")
+create_plot("Chest", "volume")
 ```
 
-### Column {width="33.33%"}
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Chest", "1RM")
+```
+
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Biceps
 #| fig-asp: 0.3
-create_plot("Biceps")
+create_plot("Biceps", "volume")
 ```
 
-### Column {width="33.33%"}
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Biceps", "1RM")
+```
+
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Triceps
 #| fig-asp: 0.3
-create_plot("Triceps")
+create_plot("Triceps", "volume")
+```
+
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Triceps", "1RM")
 ```
 
 ## Row {height="25%"}
 
-### Column {width="33.33%"}
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Hamstrings
 #| fig-asp: 0.3
-create_plot("Hamstrings")
+create_plot("Hamstrings", "volume")
 ```
 
-### Column {width="33.33%"}
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Hamstrings", "1RM")
+```
+
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Quadriceps
 #| fig-asp: 0.3
-create_plot("Quadriceps")
+create_plot("Quadriceps", "volume")
 ```
 
-### Column {width="33.33%"}
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Quadriceps", "1RM")
+```
+
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Back
 #| fig-asp: 0.3
-create_plot("Back")
+create_plot("Back", "volume")
+```
+
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Back", "1RM")
 ```
 
 ## Row {height="25%"}
 
-### Column {width="33.33%"}
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Lower back
 #| fig-asp: 0.3
-create_plot("Lower back")
+create_plot("Lower back", "volume")
 ```
 
-### Column {width="33.33%"}
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Lower back", "1RM")
+```
+
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Shoulders
 #| fig-asp: 0.3
-create_plot("Shoulders")
+create_plot("Shoulders", "volume")
 ```
 
-### Column {width="33.33%"}
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Shoulders", "1RM")
+```
+
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Trapezius
 #| fig-asp: 0.3
-create_plot("Trapezius")
+create_plot("Trapezius", "volume")
+```
+
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Trapezius", "1RM")
 ```
 
 ## Row {height="25%"}
 
-### Column {width="33.33%"}
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Abdominals
 #| fig-asp: 0.3
-create_plot("Abdominals")
+create_plot("Abdominals", "volume")
 ```
 
-### Column {width="33.33%"}
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Abdominals", "1RM")
+```
+
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Glutes
 #| fig-asp: 0.3
-create_plot("Glutes")
+create_plot("Glutes", "volume")
 ```
 
-### Column {width="33.33%"}
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Glutes", "1RM")
+```
+
+### Column {width="33.33%" .tabset}
 
 ```{r}
 #| title: Calves
 #| fig-asp: 0.3
-create_plot("Calves")
+create_plot("Calves", "volume")
+```
+
+```{r}
+#| title: Strength
+#| fig-asp: 0.3
+create_plot("Calves", "1RM")
 ```
