@@ -1,0 +1,4 @@
+project:
+  title: "Workout Tracker"
+  type: website
+  output-dir: docs
