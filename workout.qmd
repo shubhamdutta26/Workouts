@@ -24,7 +24,7 @@ library(gt)
 workout_sheet <- read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 1)
 ```
 
-# Home
+# HOME
 
 ```{r}
 #| label: all-values
@@ -52,7 +52,7 @@ longest_streak <- workout_sheet |>
 
 # Muscle type
 push = c("Chest", "Triceps", "Shoulders")
-pull = c("Back", "Lower back", "Biceps", "Trapezius")
+pull = c("Back", "Biceps", "Trapezius")
 legs = c("Quadriceps", "Hamstrings", "Running")
 
 muscle_type_stat <- function(type) {
@@ -125,7 +125,7 @@ list(
 )
 ```
 
-## Row {height="35%"}
+## Row {height="40%"}
 
 ### Column {width="25%"}
 
@@ -136,7 +136,7 @@ workout_sheet |>
   filter(muscle_group != "Running") |>
   mutate(main_muscle_group = case_match(
   muscle_group,
-  c("Back", "Lower back") ~ "Back",
+  c("Back") ~ "Back",
   c("Biceps", "Triceps", "Forearms", "Shoulders", "Trapezius") ~ "Arms & Shoulders",
   c("Quadriceps", "Hamstrings", "Glutes", "Calves") ~ "Legs",
   "Chest" ~ "Chest",
@@ -196,7 +196,7 @@ muscle_type_stat(pull)
 muscle_type_stat(legs)
 ```
 
-## Row {height="45%"}
+## Row {height="40%"}
 
 ```{r}
 #| title: Body composition
@@ -240,34 +240,37 @@ total_workout_volume |>
   theme_minimal(base_size = 20)
 ```
 
-# Workout
-
 ```{r}
 #| label: volume-strength-plot
-library(ggplot2)
-library(dplyr)
-library(lubridate)
-
-process_muscle_data <- function(group_name, metric) {
-  workout_sheet |>
+process_muscle_data <- function(group_name, metric, timeframe = "weekly") {
+  muscle_data <- workout_sheet |>
     filter(muscle_group %in% group_name) |>
     mutate(value = if (metric == "volume") weight_lb * rep else weight_lb * (1 + (rep / 30))) |>
     arrange(date) |>
     mutate(
-      week_start = floor_date(as.Date(date), "week", week_start = 7),
-      week_label = paste(format(week_start, "%b %d"), "-", format(week_start + 6, "%b %d"))
+      period_start = if (timeframe == "weekly") floor_date(as.Date(date), "week", week_start = 7) else floor_date(as.Date(date), "month"),
+      period_label = if (timeframe == "weekly") paste(format(period_start, "%b %d"), "-", format(period_start + 6, "%b %d")) else format(period_start, "%b %Y")
     ) |>
-    group_by(week_label, week_start) |>
+    group_by(period_label, period_start) |>
     summarise(agg_value = if (metric == "volume") sum(value) else mean(value, na.rm = TRUE), .groups = "drop") |>
     mutate(highest = agg_value == max(agg_value)) |>
-    arrange(week_start) |>
-    slice_tail(n = 10)
+    arrange(period_start) |>  # Ensure chronological order before slicing
+    slice_tail(n = 10) |>  
+    mutate(period_label = factor(period_label, levels = unique(period_label), ordered = TRUE))  # Ensure correct plotting order
+
+  return(muscle_data)
 }
 
-create_plot <- function(group_name, metric) {
-  muscle_data <- process_muscle_data(group_name, metric)
+create_plot <- function(group_name, metric, timeframe = "weekly") {
+  muscle_data <- process_muscle_data(group_name, metric, timeframe)
   
-  ggplot(muscle_data, aes(x = week_label, y = if (metric == "volume") agg_value / 1000 else agg_value, group = 1, fill = highest)) +
+  if (nrow(muscle_data) == 0) {
+    return(ggplot() +
+             annotate("text", x = 1, y = 1, label = "No data yet", size = 10, hjust = 0.5, vjust = 0.5) +
+             theme_void())
+  }
+
+  ggplot(muscle_data, aes(x = period_label, y = if (metric == "volume") agg_value / 1000 else agg_value, group = 1, fill = highest)) +
     geom_col() +
     scale_y_continuous(
       labels = if (metric == "volume") scales::label_number(suffix = " K") else scales::label_number(),
@@ -276,183 +279,359 @@ create_plot <- function(group_name, metric) {
     ) +
     labs(x = NULL, y = if (metric == "volume") "Total volume (lbs)" else "Mean 1RM (lbs)") +
     scale_fill_manual(values = c("FALSE" = "#ae8b2d", "TRUE" = "#0e2635"), guide = "none") +
-    theme_minimal(base_size = 20) +
-    theme(axis.text.x = element_text(size = 15))
+    theme_minimal(base_size = 40) +
+    theme(axis.text.x = element_text(size = 30))
 }
 ```
 
-## Row {height="25%"}
+# PUSH
 
-### Column {width="33.33%" .tabset}
+## Row
 
+### Column {.tabset}
 ```{r}
-#| title: Chest
-#| fig-asp: 0.3
+#| title: Chest - Volume (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Chest", "volume")
 ```
 
 ```{r}
-#| title: Strength
-#| fig-asp: 0.3
+#| title: Chest - Volume (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Chest", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Chest - Strength (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Chest", "1RM")
 ```
 
-### Column {width="33.33%" .tabset}
-
 ```{r}
-#| title: Biceps
-#| fig-asp: 0.3
-create_plot("Biceps", "volume")
+#| title: Chest - Strength (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Chest", "1RM", "monthly")
 ```
 
-```{r}
-#| title: Strength
-#| fig-asp: 0.3
-create_plot("Biceps", "1RM")
-```
+## Row
 
-### Column {width="33.33%" .tabset}
-
+### Column {.tabset}
 ```{r}
-#| title: Triceps
-#| fig-asp: 0.3
+#| title: Triceps - Volume (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Triceps", "volume")
 ```
 
 ```{r}
-#| title: Strength
-#| fig-asp: 0.3
+#| title: Triceps - Volume (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Triceps", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Triceps - Strength (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Triceps", "1RM")
 ```
 
-## Row {height="25%"}
-
-### Column {width="33.33%" .tabset}
-
 ```{r}
-#| title: Hamstrings
-#| fig-asp: 0.3
-create_plot("Hamstrings", "volume")
+#| title: Triceps - Strength (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Triceps", "1RM", "monthly")
 ```
 
+## Row
+
+### Column {.tabset}
 ```{r}
-#| title: Strength
-#| fig-asp: 0.3
-create_plot("Hamstrings", "1RM")
-```
-
-### Column {width="33.33%" .tabset}
-
-```{r}
-#| title: Quadriceps
-#| fig-asp: 0.3
-create_plot("Quadriceps", "volume")
-```
-
-```{r}
-#| title: Strength
-#| fig-asp: 0.3
-create_plot("Quadriceps", "1RM")
-```
-
-### Column {width="33.33%" .tabset}
-
-```{r}
-#| title: Back
-#| fig-asp: 0.3
-create_plot("Back", "volume")
-```
-
-```{r}
-#| title: Strength
-#| fig-asp: 0.3
-create_plot("Back", "1RM")
-```
-
-## Row {height="25%"}
-
-### Column {width="33.33%" .tabset}
-
-```{r}
-#| title: Lower back
-#| fig-asp: 0.3
-create_plot("Lower back", "volume")
-```
-
-```{r}
-#| title: Strength
-#| fig-asp: 0.3
-create_plot("Lower back", "1RM")
-```
-
-### Column {width="33.33%" .tabset}
-
-```{r}
-#| title: Shoulders
-#| fig-asp: 0.3
+#| title: Shoulders - Volume (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Shoulders", "volume")
 ```
 
 ```{r}
-#| title: Strength
-#| fig-asp: 0.3
+#| title: Shoulders - Volume (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Shoulders", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Shoulders - Strength (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Shoulders", "1RM")
 ```
 
-### Column {width="33.33%" .tabset}
+```{r}
+#| title: Shoulders - Strength (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Shoulders", "1RM", "monthly")
+```
+
+# PULL
+
+## Row
+
+### Column {.tabset}
+```{r}
+#| title: Biceps - Volume (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Biceps", "volume")
+```
 
 ```{r}
-#| title: Trapezius
-#| fig-asp: 0.3
+#| title: Biceps - Volume (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Biceps", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Biceps - Strength (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Biceps", "1RM")
+```
+
+```{r}
+#| title: Biceps - Strength (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Biceps", "1RM", "monthly")
+```
+
+## Row
+
+### Column {.tabset}
+```{r}
+#| title: Back - Volume (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Back", "volume")
+```
+
+```{r}
+#| title: Back - Volume (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Back", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Back - Strength (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Back", "1RM")
+```
+
+```{r}
+#| title: Back - Strength (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Back", "1RM", "monthly")
+```
+
+## Row
+
+### Column {.tabset}
+```{r}
+#| title: Trapezius - Volume (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Trapezius", "volume")
 ```
 
 ```{r}
-#| title: Strength
-#| fig-asp: 0.3
+#| title: Trapezius - Volume (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Trapezius", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Trapezius - Strength (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Trapezius", "1RM")
 ```
 
-## Row {height="25%"}
+```{r}
+#| title: Trapezius - Strength (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Trapezius", "1RM", "monthly")
+```
 
-### Column {width="33.33%" .tabset}
+# LEGS
+
+## Row
+
+### Column {.tabset}
+```{r}
+#| title: Hamstrings - Volume (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Hamstrings", "volume")
+```
 
 ```{r}
-#| title: Abdominals
+#| title: Hamstrings - Volume (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Hamstrings", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Hamstrings - Strength (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Hamstrings", "1RM")
+```
+
+```{r}
+#| title: Hamstrings - Strength (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Hamstrings", "1RM", "monthly")
+```
+
+## Row
+
+### Column {.tabset}
+```{r}
+#| title: Quadriceps - Volume (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Quadriceps", "volume")
+```
+
+```{r}
+#| title: Quadriceps - Volume (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Quadriceps", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Quadriceps - Strength (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Quadriceps", "1RM")
+```
+
+```{r}
+#| title: Quadriceps - Strength (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Quadriceps", "1RM", "monthly")
+```
+
+## Row
+
+### Column {.tabset}
+```{r}
+#| title: Calves - Volume (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Calves", "volume")
+```
+
+```{r}
+#| title: Calves - Volume (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Calves", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Calves - Strength (Weekly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Calves", "1RM")
+```
+
+```{r}
+#| title: Calves - Strength (Monthly)
+#| fig-width: 25
+#| fig-asp: 0.25
+create_plot("Calves", "1RM", "monthly")
+```
+
+# ABS & GLUTES
+
+## Row
+
+### Column {.tabset}
+```{r}
+#| title: Abdominals - Volume (Weekly)
 #| fig-asp: 0.3
 create_plot("Abdominals", "volume")
 ```
 
 ```{r}
-#| title: Strength
+#| title: Abdominals - Volume (Monthly)
+#| fig-asp: 0.3
+create_plot("Abdominals", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Abdominals - Strength (Weekly)
 #| fig-asp: 0.3
 create_plot("Abdominals", "1RM")
 ```
 
-### Column {width="33.33%" .tabset}
-
 ```{r}
-#| title: Glutes
+#| title: Abdominals - Strength (Monthly)
+#| fig-asp: 0.3
+create_plot("Abdominals", "1RM", "monthly")
+```
+
+## Row
+
+### Column {.tabset}
+```{r}
+#| title: Glutes - Volume (Weekly)
 #| fig-asp: 0.3
 create_plot("Glutes", "volume")
 ```
 
 ```{r}
-#| title: Strength
+#| title: Glutes - Volume (Monthly)
+#| fig-asp: 0.3
+create_plot("Glutes", "volume", "monthly")
+```
+
+### Column {.tabset}
+```{r}
+#| title: Glutes - Strength (Weekly)
 #| fig-asp: 0.3
 create_plot("Glutes", "1RM")
 ```
 
-### Column {width="33.33%" .tabset}
-
 ```{r}
-#| title: Calves
+#| title: Glutes - Strength (Monthly)
 #| fig-asp: 0.3
-create_plot("Calves", "volume")
-```
-
-```{r}
-#| title: Strength
-#| fig-asp: 0.3
-create_plot("Calves", "1RM")
+create_plot("Glutes", "1RM", "monthly")
 ```
