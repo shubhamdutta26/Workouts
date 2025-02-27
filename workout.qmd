@@ -34,11 +34,12 @@ body_comp_sheet <- read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 4)
 num_workouts <- length(unique(workout_sheet$date))
 total_volume <- sum(workout_sheet$weight_lb * workout_sheet$rep)
 top_exercise <- workout_sheet |>
-      group_by(exercise) |>
-      summarise(total_volume = weight_lb * rep) |>
-      ungroup() |>
-      slice_max(order_by = total_volume) |>
-      pull(exercise)
+  select(exercise, weight_lb, rep) |>
+  mutate(volume = weight_lb*rep) |>
+  group_by(exercise) |>
+  summarise(total_volume = sum(volume)) |>
+  slice_max(order_by = total_volume) |>
+  pull(exercise)
 longest_streak <- workout_sheet |>
   mutate(date = as.Date(date), 
          week = floor_date(date, "week")) |>
@@ -106,7 +107,7 @@ list(
 
 ```{r}
 #| content: valuebox
-#| title: "TOP EXERCISE"
+#| title: "TOP EXERCISE BY VOLUME"
 
 list(
   color = "danger",
@@ -205,22 +206,25 @@ muscle_type_stat(legs)
 #| fig-width: 25
 #| fig-asp: 0.3
 
-library(tidyverse)
-
 # Ensure date column is in Date format
 body_comp_sheet$date <- as.Date(body_comp_sheet$date)
 
-# Get the latest 12 months of data
+# Create a sequence of the last 12 months
+last_12_months <- seq(from = floor_date(Sys.Date(), "month") - months(11), 
+                      to = floor_date(Sys.Date(), "month"), by = "month")
+
+# Prepare the data
 body_comp_sheet <- body_comp_sheet %>%
   mutate(month_year = format(date, "%b %y")) %>%
   arrange(date) %>%
-  filter(date >= max(date) %m-% months(11)) %>%  # Keep only the latest 12 months
+  filter(date >= min(last_12_months)) %>%  # Keep only the latest 12 months
   mutate(month_year = factor(month_year, 
-                             levels = unique(month_year))) %>%  # Maintain order
+                             levels = format(last_12_months, "%b %y"))) %>%  # Maintain order
   group_by(month_year) %>%
   summarize(Fat = mean(fat_percent, na.rm = TRUE),
             Lean = mean(lean_percent, na.rm = TRUE)) %>%
-  pivot_longer(-month_year, names_to = "type", values_to = "percentage")
+  pivot_longer(-month_year, names_to = "type", values_to = "percentage") %>%
+  complete(month_year, type, fill = list(percentage = 0))  # Fill missing months with 0
 
 # Plot the data
 ggplot(body_comp_sheet, aes(x = month_year, y = percentage, fill = type)) +
