@@ -22,6 +22,7 @@ library(gt)
 #| label: load-data
 #| message: false
 workout_sheet <- read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 1)
+body_comp_sheet <- read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 4)
 ```
 
 # HOME
@@ -199,45 +200,104 @@ muscle_type_stat(legs)
 ## Row {height="40%"}
 
 ```{r}
+#| label: body-composition
 #| title: Body composition
+#| fig-width: 25
+#| fig-asp: 0.3
 
-body_comp_data <- tibble(
-  month = LETTERS[1:12],
-  Lean = runif(12, min = 0.6, max = 1.0),
-  Fat = 1-Lean
-)
+library(tidyverse)
 
-body_comp_data |>
-  pivot_longer(-month, names_to = "type", values_to = "percentage") |>
-  ggplot(aes(month, y = percentage, fill = type)) +
+# Ensure date column is in Date format
+body_comp_sheet$date <- as.Date(body_comp_sheet$date)
+
+# Get the latest 12 months of data
+body_comp_sheet <- body_comp_sheet %>%
+  mutate(month_year = format(date, "%b %y")) %>%
+  arrange(date) %>%
+  filter(date >= max(date) %m-% months(11)) %>%  # Keep only the latest 12 months
+  mutate(month_year = factor(month_year, 
+                             levels = unique(month_year))) %>%  # Maintain order
+  group_by(month_year) %>%
+  summarize(Fat = mean(fat_percent, na.rm = TRUE),
+            Lean = mean(lean_percent, na.rm = TRUE)) %>%
+  pivot_longer(-month_year, names_to = "type", values_to = "percentage")
+
+# Plot the data
+ggplot(body_comp_sheet, aes(x = month_year, y = percentage, fill = type)) +
   geom_col(color = "white") +
   scale_fill_manual(values = c("#ae8b2d", "#0e2635")) +
-  scale_y_continuous(labels = label_percent(),
+  scale_y_continuous(labels = scales::label_percent(),
                      limits = c(0, NA),
                      expand = expansion(mult = c(0, 0.1))) +
   labs(x = NULL, y = NULL, fill = NULL) +
-  theme_minimal(base_size = 20) +
+  theme_minimal(base_size = 40) +
   theme(legend.position = "top")
 ```
 
 ```{r}
 #| title: Total workout volume
+#| results: hide
+process_total_volume <- function(timeframe = "weekly") {
+  muscle_data <- workout_sheet |>
+    mutate(value = weight_lb * rep) |>
+    arrange(date) |>
+    mutate(
+      period_start = if (timeframe == "weekly") floor_date(as.Date(date), "week", week_start = 7) else floor_date(as.Date(date), "month"),
+      period_label = if (timeframe == "weekly") paste(format(period_start, "%m/%d"), "-", format(period_start + 6, "%m/%d")) else format(period_start, "%b %y")
+    ) |>
+    group_by(period_label, period_start) |>
+    summarise(agg_value = sum(value), .groups = "drop") |>
+    arrange(period_start)  # Ensure chronological order
 
-total_workout_volume <- tibble(
-  month = LETTERS[1:12],
-  volume = runif(12, min = 100000, max = 200000)
-)
+  # Generate a full range of weeks or months
+  last_period <- if (nrow(muscle_data) > 0) max(muscle_data$period_start) else Sys.Date()
+  first_period <- last_period - if (timeframe == "weekly") weeks(7) else months(11)
+  all_periods <- tibble(
+    period_start = seq(first_period, last_period, by = if (timeframe == "weekly") "1 week" else "1 month"),
+    period_label = if (timeframe == "weekly") paste(format(period_start, "%m/%d"), "-", format(period_start + 6, "%m/%d")) else format(period_start, "%b %y")
+  )
 
-total_workout_volume |>
-  mutate(highest = volume == max(volume)) |>
-  ggplot(aes(month, volume / 1000, fill = highest)) +
-  geom_col() +
-  scale_fill_manual(values = c("#ae8b2d", "#0e2635"), guide = "none") +  # Default & highlight color
-  labs(x = NULL, y = "Total volume (lbs)") +
-  scale_y_continuous(labels = scales::label_number(suffix = " K"),
-                     limits = c(0, NA),
-                     expand = expansion(mult = c(0, 0.1))) +
-  theme_minimal(base_size = 20)
+  # Merge actual data with full range and fill missing values
+  muscle_data <- all_periods |>
+    left_join(muscle_data, by = c("period_start", "period_label")) |>
+    mutate(agg_value = replace_na(agg_value, 0)) |>  # Fill missing values with 0
+    mutate(highest = agg_value == max(agg_value, na.rm = TRUE)) |>  
+    mutate(period_label = factor(period_label, levels = unique(period_label), ordered = TRUE))  # Ensure correct order
+
+  return(muscle_data)
+}
+
+create_volume_plot <- function(timeframe = "weekly") {
+  muscle_data <- process_total_volume(timeframe)
+
+  ggplot(muscle_data, aes(x = period_label, y = agg_value / 1000, group = 1, fill = highest)) +
+    geom_col() +
+    scale_y_continuous(
+      labels = scales::label_number(suffix = " K"),
+      limits = c(0, NA),
+      expand = expansion(mult = c(0, 0.1))
+    ) +
+    labs(x = NULL, y = "Total volume (lbs)") +
+    scale_fill_manual(values = c("FALSE" = "#ae8b2d", "TRUE" = "#0e2635"), guide = "none") +
+    theme_minimal(base_size = 40) +
+    theme(axis.text.x = element_text(size = 30))
+}
+```
+
+### Column {.tabset}
+
+```{r}
+#| title: Total Volume - Monthly
+#| fig-width: 25
+#| fig-asp: 0.3
+create_volume_plot("monthly")
+```
+
+```{r}
+#| title: Total Volume - Weekly
+#| fig-width: 25
+#| fig-asp: 0.3
+create_volume_plot("weekly")
 ```
 
 ```{r}
@@ -249,26 +309,35 @@ process_muscle_data <- function(group_name, metric, timeframe = "weekly") {
     arrange(date) |>
     mutate(
       period_start = if (timeframe == "weekly") floor_date(as.Date(date), "week", week_start = 7) else floor_date(as.Date(date), "month"),
-      period_label = if (timeframe == "weekly") paste(format(period_start, "%b %d"), "-", format(period_start + 6, "%b %d")) else format(period_start, "%b %Y")
+      period_label = if (timeframe == "weekly") paste(format(period_start, "%m/%d"), "-", format(period_start + 6, "%m/%d")) else format(period_start, "%b %y")
     ) |>
     group_by(period_label, period_start) |>
     summarise(agg_value = if (metric == "volume") sum(value) else mean(value, na.rm = TRUE), .groups = "drop") |>
-    mutate(highest = agg_value == max(agg_value)) |>
-    arrange(period_start) |>  # Ensure chronological order before slicing
-    slice_tail(n = 10) |>  
-    mutate(period_label = factor(period_label, levels = unique(period_label), ordered = TRUE))  # Ensure correct plotting order
+    arrange(period_start)  # Ensure chronological order
+
+  # Generate a full range of weeks or months
+  last_period <- if (nrow(muscle_data) > 0) max(muscle_data$period_start) else Sys.Date()
+  first_period <- last_period - if (timeframe == "weekly") weeks(11) else months(11)
+  all_periods <- tibble(
+    period_start = seq(first_period, last_period, by = if (timeframe == "weekly") "1 week" else "1 month"),
+    period_label = if (timeframe == "weekly") paste(format(period_start, "%m/%d"), "-", format(period_start + 6, "%m/%d")) else format(period_start, "%b %y")
+  )
+
+  # Merge actual data with full range and fill missing values
+  muscle_data <- all_periods |>
+    left_join(muscle_data, by = c("period_start", "period_label")) |>
+    mutate(agg_value = replace_na(agg_value, 0)) |>  # Fill missing values with 0
+    mutate(highest = agg_value == max(agg_value, na.rm = TRUE)) |>  
+    mutate(period_label = factor(period_label, levels = unique(period_label), ordered = TRUE))  # Ensure correct order
+
+  # Keep only the last 8 periods
+  muscle_data <- muscle_data |> tail(8)
 
   return(muscle_data)
 }
 
 create_plot <- function(group_name, metric, timeframe = "weekly") {
   muscle_data <- process_muscle_data(group_name, metric, timeframe)
-  
-  if (nrow(muscle_data) == 0) {
-    return(ggplot() +
-             annotate("text", x = 1, y = 1, label = "No data yet", size = 10, hjust = 0.5, vjust = 0.5) +
-             theme_void())
-  }
 
   ggplot(muscle_data, aes(x = period_label, y = if (metric == "volume") agg_value / 1000 else agg_value, group = 1, fill = highest)) +
     geom_col() +
@@ -585,26 +654,30 @@ create_plot("Calves", "1RM", "monthly")
 ### Column {.tabset}
 ```{r}
 #| title: Abdominals - Volume (Weekly)
-#| fig-asp: 0.3
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Abdominals", "volume")
 ```
 
 ```{r}
 #| title: Abdominals - Volume (Monthly)
-#| fig-asp: 0.3
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Abdominals", "volume", "monthly")
 ```
 
 ### Column {.tabset}
 ```{r}
 #| title: Abdominals - Strength (Weekly)
-#| fig-asp: 0.3
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Abdominals", "1RM")
 ```
 
 ```{r}
 #| title: Abdominals - Strength (Monthly)
-#| fig-asp: 0.3
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Abdominals", "1RM", "monthly")
 ```
 
@@ -613,25 +686,29 @@ create_plot("Abdominals", "1RM", "monthly")
 ### Column {.tabset}
 ```{r}
 #| title: Glutes - Volume (Weekly)
-#| fig-asp: 0.3
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Glutes", "volume")
 ```
 
 ```{r}
 #| title: Glutes - Volume (Monthly)
-#| fig-asp: 0.3
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Glutes", "volume", "monthly")
 ```
 
 ### Column {.tabset}
 ```{r}
 #| title: Glutes - Strength (Weekly)
-#| fig-asp: 0.3
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Glutes", "1RM")
 ```
 
 ```{r}
 #| title: Glutes - Strength (Monthly)
-#| fig-asp: 0.3
+#| fig-width: 25
+#| fig-asp: 0.25
 create_plot("Glutes", "1RM", "monthly")
 ```
