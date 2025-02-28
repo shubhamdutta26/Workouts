@@ -59,21 +59,28 @@ legs = c("Quadriceps", "Hamstrings", "Running")
 
 muscle_type_stat <- function(type) {
   workout_sheet |>
-  group_by(muscle_group) |>
-  summarise(total_volume = sum(rep*weight_lb), .groups = "drop") |>
-  mutate(percent = total_volume / sum(total_volume)) |>
-  select(-total_volume) |>
-  filter(muscle_group %in% type) |>
-  gt() |>
-  fmt_percent(
-    columns = percent,
-    decimals = 1
-  ) |>
-  cols_label(
-    muscle_group = "",
-    percent = "Proportion",
-    .fn = md
-  )
+    group_by(muscle_group) |>
+    summarise(total_volume = sum(rep * weight_lb), .groups = "drop") |>
+    mutate(percent = total_volume / sum(total_volume)) |>
+    select(-total_volume) |>
+    filter(muscle_group %in% type) |>
+    gt() |>
+    fmt_percent(
+      columns = percent,
+      decimals = 1
+    ) |>
+    cols_label(
+      muscle_group = "",
+      percent = "Proportion",
+      .fn = md
+    ) |>
+    data_color(
+      columns = percent,
+      colors = scales::col_numeric(
+        palette = c("darkblue", "lightblue"),
+        domain = NULL
+      )
+    )
 }
 ```
 

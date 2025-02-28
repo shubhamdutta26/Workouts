@@ -1,0 +1,84 @@
+getwd()
+getwd()
+use_git()
+use_github()
+workout_sheet <- read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 1)
+library(tidyverse)
+workout_sheet <- read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 1)
+workout_sheet <- readxl::read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 1)
+View(workout_sheet)
+workout_sheet |>
+select(exercise, weight_lb, rep)
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+group_by(exercise) |>
+summarise(total_vol = weight_lb*rep)
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+mutate(vol = weight_lb*rep)
+?group_by
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+mutate(vol = weight_lb*rep) |>
+group_by(exercise) |>
+summarise(total_vol = sum(vol))
+library(tidyverse)
+workout_sheet <- readxl::read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 1)
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+mutate(vol = weight_lb*rep) |>
+group_by(exercise) |>
+summarise(total_vol = sum(vol))
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+mutate(vol = weight_lb*rep) |>
+group_by(exercise) |>
+summarise(total_vol = sum(vol)) |>
+arrange(total_vol)
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+mutate(vol = weight_lb*rep) |>
+group_by(exercise) |>
+summarise(total_vol = sum(vol)) |>
+arrange(desc(total_vol))
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+count(exercise)
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+count(exercise, sort = T)
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+mutate(volume = weight_lb*rep) |>
+group_by(exercise) |>
+summarise(total_volume = sum(volume)) |>
+slice_max(order_by = total_volume)
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+mutate(volume = weight_lb*rep) |>
+group_by(exercise) |>
+summarise(total_volume = sum(volume)) |>
+slice_max(order_by = total_volume) |>
+pull(exercise)
+workout_sheet |>
+select(exercise, weight_lb, rep) |>
+mutate(volume = weight_lb*rep) |>
+group_by(exercise) |>
+summarise(total_volume = sum(volume))
+x <- workout_sheet |>
+select(exercise, weight_lb, rep) |>
+mutate(volume = weight_lb*rep) |>
+group_by(exercise) |>
+summarise(total_volume = sum(volume)) |>
+slice_max(order_by = total_volume)
+View(x)
+workout_sheet <- readxl::read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 1)
+dput(head(data, 10))
+workout_sheet <- readxl::read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 1)
+dput(head(workout_sheet, 10))
+workout_sheet$date = as.Date(workout_sheet$date)
+dput(head(workout_sheet, 10))
+workout_sheet <- readxl::read_excel("data/2025-02-23_Workout_SD.xlsx", sheet = 1) |>
+select(date:time_mins)
+workout_sheet$date = as.Date(workout_sheet$date)
+dput(head(workout_sheet, 10))
